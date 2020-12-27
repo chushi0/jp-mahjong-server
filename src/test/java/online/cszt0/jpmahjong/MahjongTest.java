@@ -78,5 +78,30 @@ public class MahjongTest {
         ));
         result = Mahjong.checkWin(plate, new Mahjong.Card(Mahjong.Card.Type.M, 5), environment, Mahjong.CardSource.ZiMo, Mahjong.RiChiType.None, false);
         assert result != null && result.fan == -2;
+
+        // 立直、役牌发、役牌中、对对和、三暗刻、宝牌3、拔北宝牌2、里宝牌3，15番50符，累计役满
+        environment.dora.clear();
+        environment.ridora.clear();
+        environment.dora.add(new Mahjong.Card(Mahjong.Card.Type.S, 4));
+        environment.ridora.add(new Mahjong.Card(Mahjong.Card.Type.S, 2));
+        plate.cards.clear();
+        plate.cards.addAll(Arrays.asList(
+                new Mahjong.Card(Mahjong.Card.Type.P, 4),
+                new Mahjong.Card(Mahjong.Card.Type.P, 4),
+                new Mahjong.Card(Mahjong.Card.Type.S, 2),
+                new Mahjong.Card(Mahjong.Card.Type.S, 2),
+                new Mahjong.Card(Mahjong.Card.Type.S, 2),
+                new Mahjong.Card(Mahjong.Card.Type.S, 4),
+                new Mahjong.Card(Mahjong.Card.Type.S, 4),
+                new Mahjong.Card(Mahjong.Card.Type.S, 4),
+                new Mahjong.Card(Mahjong.Card.Type.Z, 6),
+                new Mahjong.Card(Mahjong.Card.Type.Z, 6),
+                new Mahjong.Card(Mahjong.Card.Type.Z, 6),
+                new Mahjong.Card(Mahjong.Card.Type.Z, 7),
+                new Mahjong.Card(Mahjong.Card.Type.Z, 7)
+        ));
+        plate.bei = 2;
+        result = Mahjong.checkWin(plate, new Mahjong.Card(Mahjong.Card.Type.Z, 7), environment, Mahjong.CardSource.RongHu, Mahjong.RiChiType.RiChi, false);
+        assert result != null && result.fan == 15 && result.fu == 50;
     }
 }

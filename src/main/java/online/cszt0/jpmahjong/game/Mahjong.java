@@ -498,6 +498,7 @@ public class Mahjong {
     /**
      * 听牌结果集
      */
+
     public static class ListenResult {
         /**
          * 缺的牌
@@ -1752,6 +1753,9 @@ public class Mahjong {
         {
             int doraCount = 0;
             for (Card dora : env.dora) {
+                if (dora.equalsIgnoreRedDora(new Card(Card.Type.Z, 4))) {
+                    doraCount += plate.bei;
+                }
                 if (card.equalsIgnoreRedDora(dora)) {
                     doraCount++;
                 }
@@ -1814,6 +1818,9 @@ public class Mahjong {
         if (richi != RiChiType.None) {
             int doraCount = 0;
             for (Card dora : env.ridora) {
+                if (dora.equalsIgnoreRedDora(new Card(Card.Type.Z, 4))) {
+                    doraCount += plate.bei;
+                }
                 if (card.equalsIgnoreRedDora(dora)) {
                     doraCount++;
                 }
