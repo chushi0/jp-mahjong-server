@@ -1,5 +1,8 @@
 package online.cszt0.jpmahjong.game;
 
+import org.springframework.lang.NonNull;
+import org.springframework.lang.Nullable;
+
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -406,6 +409,157 @@ public class Mahjong {
             }
             return true;
         }
+
+        /**
+         * 是否可以吃
+         *
+         * @param card 要吃的牌
+         * @return 是否可以吃
+         */
+        public boolean canChi(Card card) {
+            boolean[] flag = new boolean[4];
+            for (Card c : cards) {
+                if (c.type == card.type) {
+                    flag[0] |= c.getNumber() + 2 == card.getNumber();
+                    flag[1] |= c.getNumber() + 1 == card.getNumber();
+                    flag[2] |= c.getNumber() - 1 == card.getNumber();
+                    flag[3] |= c.getNumber() - 2 == card.getNumber();
+                }
+            }
+            return flag[0] && flag[1] || flag[1] && flag[2] || flag[2] && flag[3];
+        }
+
+        /**
+         * 是否可以碰
+         *
+         * @param card 要碰的牌
+         * @return 是否可以碰
+         */
+        public boolean canPeng(Card card) {
+            int count = 0;
+            for (Card c : cards) {
+                if (c.equalsIgnoreRedDora(card)) {
+                    count++;
+                }
+            }
+            return count >= 3;
+        }
+
+        /**
+         * 是否可以大明杠
+         *
+         * @param card 要杠的牌
+         * @return 是否可以大明杠
+         */
+        public boolean canDaMingGang(Card card) {
+            int count = 0;
+            for (Card c : cards) {
+                if (c.equalsIgnoreRedDora(card)) {
+                    count++;
+                }
+            }
+            return count == 4;
+        }
+
+        /**
+         * 是否可以加杠
+         *
+         * @param card 摸到的牌
+         * @return 是否可以加杠
+         */
+        public boolean canBuGang(Card card) {
+            for (Fulu fulu : fulus) {
+                if (fulu.isPeng() && !fulu.isGang()) {
+                    Card c = fulu.original.get(0);
+                    if (c.equalsIgnoreRedDora(card)) {
+                        return true;
+                    }
+                    for (Card cc : cards) {
+                        if (c.equalsIgnoreRedDora(cc)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        /**
+         * 是否可以暗杠
+         * <p>
+         * 暗杠规则：
+         * 非立直情况下，摸到四张相同的牌即可暗杠
+         * 立直情况下，除了有四张相同的牌外，还必须满足以下条件：
+         * 1. 这张牌刚刚摸到
+         * 2. 要杠的牌只能解释为刻子
+         *
+         * @param card  摸到的牌
+         * @param richi 是否已经立直
+         * @return 是否可以暗杠
+         */
+        public boolean canAnGang(Card card, boolean richi) {
+            if (!richi) {
+                @SuppressWarnings("unchecked")
+                ArrayList<Card> cards = (ArrayList<Card>) this.cards.clone();
+                cards.add(card);
+                Collections.sort(cards);
+                card = null;
+                int count = 0;
+                for (Card c : cards) {
+                    if (c.equalsIgnoreRedDora(card)) {
+                        count++;
+                        if (count == 4) {
+                            return true;
+                        }
+                    } else {
+                        card = c;
+                        count = 0;
+                    }
+                }
+                return false;
+            } else {
+                ArrayList<SplitWay> splitWays = splitPlate(cards, false, true);
+                assert !splitWays.isEmpty();
+                boolean can = true;
+                for (SplitWay splitWay : splitWays) {
+                    boolean found = false;
+                    for (MianZi mianZi : splitWay.mianzi) {
+                        if (mianZi.isPong() && mianZi.cards[0].equalsIgnoreRedDora(card)) {
+                            found = true;
+                        }
+                    }
+                    can &= found;
+                }
+                return can;
+            }
+        }
+
+        /**
+         * 是否九种九牌
+         *
+         * @param card 摸到的牌
+         * @return 是否九种九牌
+         */
+        public boolean isKSKH(Card card) {
+            List<Card> shisanyao = Arrays.asList(
+                    new Card(Card.Type.M, 1),
+                    new Card(Card.Type.M, 9),
+                    new Card(Card.Type.P, 1),
+                    new Card(Card.Type.P, 9),
+                    new Card(Card.Type.S, 1),
+                    new Card(Card.Type.S, 9),
+                    new Card(Card.Type.Z, 1),
+                    new Card(Card.Type.Z, 2),
+                    new Card(Card.Type.Z, 3),
+                    new Card(Card.Type.Z, 4),
+                    new Card(Card.Type.Z, 5),
+                    new Card(Card.Type.Z, 6),
+                    new Card(Card.Type.Z, 7)
+            );
+            shisanyao.remove(card);
+            cards.forEach(shisanyao::remove);
+            return shisanyao.size() < 13 - 9;
+        }
     }
 
     /**
@@ -509,24 +663,39 @@ public class Mahjong {
          */
         public final Card giveup;
         /**
-         * 番数
+         * （荣和）番数
          */
         public final int fan;
         /**
-         * 符数
+         * （荣和）符数
          */
         public final int fu;
         /**
-         * 役种
+         * （荣和）役种
          */
         public final ArrayList<YiZhong> yiZhongs;
+        /**
+         * （自摸）番数
+         */
+        public final int zimofan;
+        /**
+         * （自摸）符数
+         */
+        public final int zimofu;
+        /**
+         * （自摸）役种
+         */
+        public final ArrayList<YiZhong> zimoyizhong;
 
-        public ListenResult(Card waitFor, Card giveup, int fan, int fu, ArrayList<YiZhong> yiZhongs) {
+        public ListenResult(Card waitFor, Card giveup, int fan, int fu, ArrayList<YiZhong> yiZhongs, int zimofan, int zimofu, ArrayList<YiZhong> zimoyizhong) {
             this.waitFor = waitFor;
             this.giveup = giveup;
             this.fan = fan;
             this.fu = fu;
             this.yiZhongs = yiZhongs;
+            this.zimofan = zimofan;
+            this.zimofu = zimofu;
+            this.zimoyizhong = zimoyizhong;
         }
     }
 
@@ -705,6 +874,7 @@ public class Mahjong {
      * @param ibachi      是否一发
      * @return 和牌结果，如果未和牌则返回 null
      */
+    @Nullable
     public static WinResult checkWin(Plate plate, Card card, Environment environment, CardSource source, RiChiType riChiType, boolean ibachi) {
         // 复制牌
         @SuppressWarnings("unchecked")
@@ -731,12 +901,43 @@ public class Mahjong {
      * 检查听牌
      *
      * @param plate       玩家手牌
+     * @param card        摸到的牌（如果存在的话）
      * @param environment 场况
-     * @return 听牌结果，如果未听牌则返回空数组
+     * @param riChiType   立直
+     * @return 听牌结果，如果未听牌则返回 null
      */
-    public static ArrayList<ListenResult> checkListen(Plate plate, Environment environment) {
-        // TODO: implement this method
-        return null;
+    @Nullable
+    public static ArrayList<ListenResult> checkListen(Plate plate, @Nullable Card card, Environment environment, RiChiType riChiType) {
+        // 复制牌
+        @SuppressWarnings("unchecked")
+        ArrayList<Card> cards = (ArrayList<Card>) plate.cards.clone();
+        if (card != null) {
+            cards.add(card);
+        }
+        // 拆解牌
+        ArrayList<SplitWay> splitWays = splitPlate(cards, card != null, true);
+        // 无法拆解：未听牌
+        if (splitWays.isEmpty()) {
+            return null;
+        }
+        // 检查役种
+        // TODO: 高点法保留最大得点
+        ArrayList<ListenResult> listenResults = new ArrayList<>();
+        Plate clonePlate = new Plate();
+        clonePlate.bei = plate.bei;
+        clonePlate.fulus.addAll(plate.fulus);
+        for (SplitWay splitWay : splitWays) {
+            clonePlate.cards.clear();
+            clonePlate.cards.addAll(plate.cards);
+            if (card != null) {
+                clonePlate.cards.add(card);
+                clonePlate.cards.remove(splitWay.giveup);
+            }
+            YiZhongResult ronghu = computeYizhong(splitWay, plate, splitWay.waitFor, CardSource.RongHu, riChiType, false, environment);
+            YiZhongResult zimo = computeYizhong(splitWay, plate, splitWay.waitFor, CardSource.ZiMo, riChiType, false, environment);
+            listenResults.add(new ListenResult(splitWay.waitFor, splitWay.giveup, ronghu.fan, ronghu.fu, ronghu.yiZhongs, zimo.fan, zimo.fu, zimo.yiZhongs));
+        }
+        return listenResults;
     }
 
     /**
