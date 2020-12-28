@@ -1,11 +1,8 @@
 package online.cszt0.jpmahjong.game;
 
-import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 
 import java.util.*;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
 
 /**
  * 用于麻将的各种工具方法
@@ -563,6 +560,35 @@ public class Mahjong {
     }
 
     /**
+     * 舍张
+     */
+    public static class Shezhang {
+
+        public enum Status {
+            /**
+             * 正常
+             */
+            Normal,
+            /**
+             * 立直宣言牌
+             */
+            RiChi,
+            /**
+             * 被他家副露
+             */
+            Obtained
+        }
+
+        public final Card card;
+        public Status status;
+
+        public Shezhang(Card card) {
+            this.card = card;
+            this.status = Status.Normal;
+        }
+    }
+
+    /**
      * 场况
      */
     public static class Environment {
@@ -652,7 +678,6 @@ public class Mahjong {
     /**
      * 听牌结果集
      */
-
     public static class ListenResult {
         /**
          * 缺的牌
@@ -864,6 +889,110 @@ public class Mahjong {
         }
     }
 
+    public static class Paishan {
+        public final Card[] cards;
+        public int nextCardIndex;
+        public int haidiCardIndex;
+        public int doraCount;
+        public int doraIndex;
+        public int lingshangIndex;
+
+        Paishan(Card[] cards) {
+            this.cards = cards;
+        }
+
+        public static Paishan generate() {
+            ArrayList<Card> allCards = new ArrayList<>();
+            // M、P、S
+            final int[] count = {1, 4, 4, 4, 4, 3, 4, 4, 4, 4};
+            for (int i = 0; i <= 9; i++) {
+                for (int j = 0; j < count[i]; j++) {
+                    allCards.add(new Card(Card.Type.M, i));
+                    allCards.add(new Card(Card.Type.P, i));
+                    allCards.add(new Card(Card.Type.S, i));
+                }
+            }
+            // Z
+            for (int i = 1; i <= 7; i++) {
+                for (int j = 0; j < 4; j++) {
+                    allCards.add(new Card(Card.Type.Z, i));
+                }
+            }
+            Collections.shuffle(allCards);
+            Paishan paishan = new Paishan(allCards.toArray(new Card[0]));
+            final int cardCount = (9 * 3 + 7) * 4;
+            paishan.doraCount = 1;
+            paishan.doraIndex = cardCount - 1 - 4 - 1;
+            paishan.haidiCardIndex = cardCount - 1 - 4 - 10;
+            paishan.lingshangIndex = cardCount - 1;
+            return paishan;
+        }
+
+        /**
+         * 从牌山中拿下一张牌
+         *
+         * @return 下一张牌
+         */
+        public Card nextCard() {
+            return cards[nextCardIndex++];
+        }
+
+        /**
+         * 从牌山中拿下一张岭上牌
+         * 该操作会同时移动海底牌，但不会更改宝牌
+         *
+         * @return 下一张岭上牌
+         */
+        public Card nextLingshangCard() {
+            haidiCardIndex--;
+            return cards[lingshangIndex--];
+        }
+
+        /**
+         * 判断是否已经摸到海底牌
+         *
+         * @return 如果海底牌已经被摸到，返回 true
+         */
+        public boolean isHaidi() {
+            return nextCardIndex > haidiCardIndex;
+        }
+
+        /**
+         * 填充宝牌
+         *
+         * @param env 环境
+         */
+        public void fillDora(Environment env) {
+            for (int i = 0; i < doraCount; i++) {
+                env.dora.add(doraNextCard(cards[doraIndex - 2 * i]));
+                env.ridora.add(doraNextCard(cards[doraIndex + 1 - 2 * i]));
+            }
+        }
+
+        /**
+         * @see #doraNextCard(Card)
+         */
+        private static final Card[] z_dora_card = {
+                new Card(Card.Type.Z, 2),
+                new Card(Card.Type.Z, 3),
+                new Card(Card.Type.Z, 4),
+                new Card(Card.Type.Z, 1),
+                new Card(Card.Type.Z, 6),
+                new Card(Card.Type.Z, 7),
+                new Card(Card.Type.Z, 5),
+        };
+
+        private Card doraNextCard(Card card) {
+            Card.Type type = card.getType();
+            if (type == Card.Type.Z) {
+                return z_dora_card[card.getNumber() - 1];
+            }
+            int num = card.getNumber() + 1;
+            if (num == 10) num = 1;
+            return new Card(type, num);
+        }
+    }
+
     /**
      * 检查和牌
      *
@@ -880,6 +1009,11 @@ public class Mahjong {
         @SuppressWarnings("unchecked")
         ArrayList<Card> cards = (ArrayList<Card>) plate.cards.clone();
         cards.add(card);
+        // 天和情况
+        if (card == null) {
+            assert plate.cards.size() == 14;
+            card = plate.cards.get(0);
+        }
         // 拆解牌
         ArrayList<SplitWay> splitWays = splitPlate(cards, false, false);
         // 无法拆解：未和牌
@@ -914,8 +1048,27 @@ public class Mahjong {
         if (card != null) {
             cards.add(card);
         }
+        boolean canGiveup;
+        switch (cards.size()) {
+            default:
+                assert false;
+            case 1:
+            case 4:
+            case 7:
+            case 10:
+            case 13:
+                canGiveup = false;
+                break;
+            case 2:
+            case 5:
+            case 8:
+            case 11:
+            case 14:
+                canGiveup = true;
+                break;
+        }
         // 拆解牌
-        ArrayList<SplitWay> splitWays = splitPlate(cards, card != null, true);
+        ArrayList<SplitWay> splitWays = splitPlate(cards, canGiveup, true);
         // 无法拆解：未听牌
         if (splitWays.isEmpty()) {
             return null;
