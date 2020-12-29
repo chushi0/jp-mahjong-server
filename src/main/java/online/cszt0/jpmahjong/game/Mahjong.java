@@ -2308,4 +2308,18 @@ public class Mahjong {
 
         return new YiZhongResult(fan, fu, yizhong);
     }
+
+    /**
+     * 流满检查
+     * @param shezhang 舍张
+     * @return 如果流满，返回 true，否则返回 false
+     */
+    public static boolean isLiuman(ArrayList<Shezhang> shezhang) {
+        for(Shezhang sz:shezhang) {
+            if(sz.status == Shezhang.Status.Obtained || !sz.card.isYaoJiu()) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

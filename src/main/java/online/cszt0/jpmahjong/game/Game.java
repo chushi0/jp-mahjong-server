@@ -103,6 +103,10 @@ public class Game {
      * 流局标记：九种九牌、三家和了
      */
     private boolean kskh, sjhp;
+    /**
+     * 杠牌数量
+     */
+    private int gangCount;
 
     /**
      * 牌山
@@ -193,12 +197,123 @@ public class Game {
                 }
                 // 开局
                 newGame();
+                gameOngoing = true;
                 while (gameOngoing) {
                     // 一局开始
                     newMatch();
                     // 主逻辑循环
                     while (tickMatch()) {
-                        // TODO: 流局判定
+                        // 流局判定
+                        // 四风连打
+                        if (firstXun && playerCount == 4) {
+                            int[] feng = new int[4];
+                            for (int i = 0; i < playerCount; i++) {
+                                Player p = playerOrder.get(i);
+                                if (p.shezhang.size() == 0) {
+                                    break;
+                                }
+                                Mahjong.Card card = p.shezhang.get(0).card;
+                                if (card.isFeng()) {
+                                    feng[i] = card.getNumber();
+                                }
+                            }
+                            if (feng[0] == feng[1] && feng[0] == feng[2] && feng[0] == feng[3] && feng[0] != 0) {
+                                nextMatch(0);
+                                break;
+                            }
+                        }
+                        // 四家立直
+                        if (playerCount == 4) {
+                            int richiCount = 0;
+                            for (Player p : playerOrder) {
+                                if (p.riChiType != Mahjong.RiChiType.None) {
+                                    richiCount++;
+                                }
+                            }
+                            if (richiCount == 4) {
+                                nextMatch(0);
+                                break;
+                            }
+                        }
+                        // 四杠散了
+                        if (gangCount == 4 && !fromLingshang) {
+                            int gangPlayerCount = 0;
+                            for (Player p : playerOrder) {
+                                for (Mahjong.Fulu fulu : p.plate.fulus) {
+                                    if (fulu.isGang()) {
+                                        gangPlayerCount++;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (gangPlayerCount > 1) {
+                                nextMatch(0);
+                                break;
+                            }
+                        }
+                        // 九种九牌、三家和
+                        if (kskh || sjhp) {
+                            nextMatch(0);
+                            break;
+                        }
+                        // 荒牌流局
+                        if (paishan.isHaidi()) {
+                            // 听牌
+                            ArrayList<Player> tingpaiPlayers = new ArrayList<>();
+                            ArrayList<Player> notingPlayers = new ArrayList<>();
+                            for (Player p : playerOrder) {
+                                if (p.tingpai != null) {
+                                    tingpaiPlayers.add(p);
+                                    p.showPlate = true;
+                                } else {
+                                    notingPlayers.add(p);
+                                }
+                            }
+                            // 流满
+                            ArrayList<Player> liumanPlayer = new ArrayList<>();
+                            for (Player p : playerOrder) {
+                                if (Mahjong.isLiuman(p.shezhang)) {
+                                    liumanPlayer.add(p);
+                                }
+                            }
+                            if (!liumanPlayer.isEmpty()) {
+                                for (Player p : liumanPlayer) {
+                                    if (getPlayerMenfeng(p) == Mahjong.Feng.Dong) {
+                                        p.pointChange += 12000;
+                                        for (Player pp : playerOrder) {
+                                            if (pp != p) {
+                                                pp.pointChange -= 4000;
+                                            }
+                                        }
+                                    } else {
+                                        p.pointChange += 8000;
+                                        for (Player pp : playerOrder) {
+                                            if (pp != p) {
+                                                if (getPlayerMenfeng(pp) == Mahjong.Feng.Dong) {
+                                                    pp.pointChange -= 4000;
+                                                } else {
+                                                    pp.pointChange -= 2000;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                // 罚符
+                                int count = tingpaiPlayers.size();
+                                if (count != 0 && count != playerCount) {
+                                    int fafu = playerCount * 1000;
+                                    for (Player p : tingpaiPlayers) {
+                                        p.pointChange += fafu / tingpaiPlayers.size();
+                                    }
+                                    for (Player p : notingPlayers) {
+                                        p.pointChange -= fafu / notingPlayers.size();
+                                    }
+                                }
+                            }
+                            applyPlayerPointChange();
+                            // TODO: 通知玩家
+                        }
                     }
                     // 一局结束
                     endMatch();
@@ -332,6 +447,13 @@ public class Game {
             player.justObtain = null;
         }
 
+        // 环境
+        Mahjong.Environment env = new Mahjong.Environment();
+        env.changfeng = getChangfeng();
+        env.tianhu = turn == 0 && firstXun;
+        env.dihu = turn != 0 && firstXun;
+        paishan.fillDora(env);
+
         // 等待玩家操作
         // 九种九牌、出牌、暗杠、加杠、拔北、立直、自摸
         Player.Action action = player.waitForAction(firstXun, canGang);
@@ -346,7 +468,47 @@ public class Game {
             }
             case TsuMmo: {
                 // 自摸
-                // TODO: 处理和牌
+                assert mopai;
+                player.showPlate = true;
+                // 处理和牌
+                env.menfeng = getPlayerMenfeng(player);
+                Mahjong.CardSource source;
+                if (fromLingshang) {
+                    source = Mahjong.CardSource.LingShang;
+                } else if (paishan.isHaidi()) {
+                    source = Mahjong.CardSource.HaiDi;
+                } else {
+                    source = Mahjong.CardSource.ZiMo;
+                }
+                // 役种计算
+                Mahjong.WinResult result = Mahjong.checkWin(player.plate, player.justObtain, env, source, player.riChiType, player.ihatsu);
+                assert result != null;
+                // 点数计算
+                boolean zhuang = env.menfeng == Mahjong.Feng.Dong;
+                Mahjong.PointResult point = Mahjong.computePoint(result.fan, result.fu, zhuang);
+                player.pointChange = richi;
+                for (int i = 0; i < playerCount; i++) {
+                    Player p = getMenfengPlayer(Mahjong.Feng.values()[i]);
+                    if (p != player) {
+                        int v = 100 * benchang;
+                        if (i == 0) {
+                            v += point.qinjia;
+                        } else {
+                            v += point.zijia;
+                        }
+                        p.pointChange = -v;
+                        player.pointChange += v;
+                    }
+                }
+                applyPlayerPointChange();
+                // TODO: 通知玩家
+                // 清空立直棒，判断连庄
+                richi = 0;
+                if (zhuang) {
+                    nextMatch(0);
+                } else {
+                    nextMatch(2);
+                }
                 return false;
             }
         }
@@ -409,21 +571,17 @@ public class Game {
             case AnGang:
             case JiaGang:
             case Bei:
-                cardSource = Mahjong.CardSource.LingShang;
+                cardSource = Mahjong.CardSource.QiangGang;
                 break;
             default:
                 cardSource = null;
                 assert false;
                 break;
         }
-        // 环境
-        Mahjong.Environment env = new Mahjong.Environment();
-        env.changfeng = getChangfeng();
-        env.tianhu = turn == 0 && firstXun;
-        env.dihu = turn != 0 && firstXun;
-        paishan.fillDora(env);
         // 寻找可和牌玩家
-        for (Player p : playerOrder) {
+        for (int i = 0; i < playerOrder.size(); i++) {
+            // 因为和牌时只有一人能拿到积棒和供托，因此需要保证顺序
+            Player p = playerOrder.get((chang + i - 1) % playerCount);
             // 是否听牌，且听这张牌
             if (p != player && !p.zhenting && p.tingpai != null && p.tingpai.contains(action.outCard.asIgnoreRedDora())) {
                 // 检查役种
@@ -514,10 +672,44 @@ public class Game {
             }
         }
         if (!decideHuPlayers.isEmpty()) {
+            for (Player p : decideHuPlayers) {
+                p.showPlate = true;
+            }
             hasAction = true;
             if (pengPlayer != null) pengPlayer.interruptOperate();
             if (chiPlayer != null) chiPlayer.interruptOperate();
-            // TODO: 处理和牌
+            if (decideHuPlayers.size() == 3) {
+                // 三家和流局
+                sjhp = true;
+                return true;
+            }
+            // 逐个役种、点数计算
+            boolean first = true;
+            boolean hasZhuang = false;
+            for (Player p : decideHuPlayers) {
+                env.menfeng = getPlayerMenfeng(p);
+                Mahjong.WinResult result = Mahjong.checkWin(p.plate, action.outCard, env, cardSource, p.riChiType, p.ihatsu);
+                assert result != null;
+                boolean zhuang = env.menfeng == Mahjong.Feng.Dong;
+                hasZhuang |= zhuang;
+                Mahjong.PointResult point = Mahjong.computePoint(result.fan, result.fu, zhuang);
+                p.pointChange = point.fangchong;
+                player.pointChange -= point.fangchong;
+                if (first) {
+                    first = false;
+                    p.pointChange += richi + 100 * playerCount * benchang;
+                    player.pointChange -= 100 * playerCount * benchang;
+                }
+            }
+            applyPlayerPointChange();
+            // TODO: 通知玩家
+            // 清空立直棒，判断连庄
+            richi = 0;
+            if (hasZhuang) {
+                nextMatch(0);
+            } else {
+                nextMatch(2);
+            }
         }
 
         // 碰
@@ -534,6 +726,7 @@ public class Game {
                     canGang = true;
                     fromLingshang = true;
                     showDora = true;
+                    gangCount++;
                 }
                 turn = playerOrder.indexOf(pengPlayer);
                 changeTurn = false;
@@ -546,7 +739,7 @@ public class Game {
 
         // 吃
         if (chiPlayer != null && !hasAction) {
-            boolean result = chiPlayer.waitForRon();
+            boolean result = chiPlayer.waitForChi();
             if (result) {
                 mopai = false;
                 turn = playerOrder.indexOf(chiPlayer);
@@ -562,11 +755,13 @@ public class Game {
         if (action.type == Player.ActionType.AnGang) {
             fromLingshang = true;
             paishan.doraCount++;
+            gangCount++;
             mingpai();
             // TODO: 告知玩家宝牌
         } else if (action.type == Player.ActionType.JiaGang) {
             fromLingshang = true;
             showDora = true;
+            gangCount++;
             mingpai();
         } else if (action.type == Player.ActionType.RiChi) {
             if (firstXun) {
@@ -591,8 +786,83 @@ public class Game {
         return true;
     }
 
+    /**
+     * 应用玩家点数更改
+     */
+    private void applyPlayerPointChange() {
+        for (Player player : playerOrder) {
+            player.point += player.pointChange;
+        }
+    }
+
     private void endMatch() {
-        // TODO: implement this method
+    }
+
+    /**
+     * 下一局
+     *
+     * @param type 类型。0：连庄，1：不连庄，继承本场数，2：不连庄，不继承本场数
+     */
+    private void nextMatch(int type) {
+        switch (type) {
+            case 0: {
+                benchang++;
+                // All Last 时，庄 1 位且达到最大点数，结束
+                if (isAllLast()) {
+                    Player top = getTop();
+                    Player dong = getMenfengPlayer(Mahjong.Feng.Dong);
+                    if (top == dong && top.point >= 30000) {
+                        gameOngoing = false;
+                    }
+                }
+                break;
+            }
+            case 2: {
+                benchang = 0;
+                // no break
+            }
+            case 1: {
+                chang++;
+                if (chang == playerCount) {
+                    chang = 1;
+                    changfeng++;
+                    if (changfeng == allLastChangfeng + 2) {
+                        gameOngoing = false;
+                    }
+                }
+                if (isAllLast()) {
+                    Player top = getTop();
+                    if (top.point >= 30000) {
+                        gameOngoing = false;
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    /**
+     * 判断是否已经 All Last
+     *
+     * @return 如果已经 All Last，则返回 true
+     */
+    private boolean isAllLast() {
+        return changfeng == allLastChangfeng && chang == playerCount || changfeng > allLastChangfeng;
+    }
+
+    /**
+     * 获取 1 位玩家
+     *
+     * @return 1 位玩家
+     */
+    private Player getTop() {
+        Player player = playerOrder.get(0);
+        for (Player p : playerOrder) {
+            if (p.point > player.point) {
+                player = p;
+            }
+        }
+        return player;
     }
 
     /**
@@ -601,7 +871,8 @@ public class Game {
      * @return 场风
      */
     private Mahjong.Feng getChangfeng() {
-        return Mahjong.Feng.values()[(changfeng - 1) % 4];
+        // FIXME: 三人麻将中，西风圈打完后的加时赛应该是北风还是东风？同理，二人麻将应该是哪一个？
+        return Mahjong.Feng.values()[(changfeng - 1) % playerCount];
     }
 
     /**

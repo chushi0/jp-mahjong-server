@@ -21,6 +21,10 @@ public abstract class Player {
      */
     public int point;
     /**
+     * 点数改变
+     */
+    public int pointChange;
+    /**
      * 牌面信息
      */
     public Mahjong.Plate plate;
@@ -99,6 +103,7 @@ public abstract class Player {
         zhenting = false;
         tingpai = null;
         showPlate = false;
+        pointChange = 0;
     }
 
     /**
@@ -161,7 +166,7 @@ public abstract class Player {
      *
      * @return 如果该玩家决定吃，返回 true
      */
-    public abstract int waitForChi();
+    public abstract boolean waitForChi();
 
     /**
      * 是否需要将打出的牌横放
