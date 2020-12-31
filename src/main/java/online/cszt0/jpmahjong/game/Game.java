@@ -219,6 +219,10 @@ public class Game {
                             }
                             if (feng[0] == feng[1] && feng[0] == feng[2] && feng[0] == feng[3] && feng[0] != 0) {
                                 nextMatch(0);
+                                // 通知玩家
+                                for (Player p : playerOrder) {
+                                    p.onSiFengLianDa();
+                                }
                                 break;
                             }
                         }
@@ -232,6 +236,10 @@ public class Game {
                             }
                             if (richiCount == 4) {
                                 nextMatch(0);
+                                // 通知玩家
+                                for (Player p : playerOrder) {
+                                    p.onSiJiaLiZhi();
+                                }
                                 break;
                             }
                         }
@@ -248,16 +256,37 @@ public class Game {
                             }
                             if (gangPlayerCount > 1) {
                                 nextMatch(0);
+                                // 通知玩家
+                                for (Player p : playerOrder) {
+                                    p.onSiGangSanLe();
+                                }
                                 break;
                             }
                         }
                         // 九种九牌、三家和
-                        if (kskh || sjhp) {
+                        if (kskh) {
                             nextMatch(0);
+                            // 通知玩家
+                            for (Player p : playerOrder) {
+                                p.onPlayerKskh();
+                            }
+                            break;
+                        }
+                        if (sjhp) {
+                            nextMatch(0);
+                            // 通知玩家
+                            for (Player p : playerOrder) {
+                                p.onSanJiaHu();
+                            }
                             break;
                         }
                         // 荒牌流局
                         if (paishan.isHaidi()) {
+                            // 通知玩家
+                            // TODO: 包含听牌信息
+                            for (Player p : playerOrder) {
+                                p.onHuangPaiLiuJu();
+                            }
                             // 听牌
                             ArrayList<Player> tingpaiPlayers = new ArrayList<>();
                             ArrayList<Player> notingPlayers = new ArrayList<>();
@@ -277,6 +306,14 @@ public class Game {
                                 }
                             }
                             if (!liumanPlayer.isEmpty()) {
+                                ArrayList<Boolean> zhuangs = new ArrayList<>();
+                                for (Player p : liumanPlayer) {
+                                    zhuangs.add(getPlayerMenfeng(p) == Mahjong.Feng.Dong);
+                                }
+                                // 通知玩家
+                                for (Player p : playerOrder) {
+                                    p.onLiuJuManGuan(liumanPlayer, zhuangs);
+                                }
                                 for (Player p : liumanPlayer) {
                                     if (getPlayerMenfeng(p) == Mahjong.Feng.Dong) {
                                         p.pointChange += 12000;
@@ -312,7 +349,6 @@ public class Game {
                                 }
                             }
                             applyPlayerPointChange();
-                            // TODO: 通知玩家
                         }
                     }
                     // 一局结束
@@ -343,15 +379,22 @@ public class Game {
         chang = 1;
         benchang = 0;
         richi = 0;
-        // TODO: 发送新对局消息
+        // 发送新对局消息
+        for (int i = 0; i < playerCount; i++) {
+            playerOrder.get(i).onGameStart(playerOrder, i);
+        }
     }
 
     /**
      * 终局结算
      */
     private void endGame() {
-        // TODO: 计算终局信息并通知玩家
-        playerOrder.clear();
+        // 计算终局信息并通知玩家
+        playerOrder.sort((o1, o2) -> o1.point - o2.point);
+        playerOrder.get(0).point += richi * 1000;
+        for (Player p : playerOrder) {
+            p.onGameEnd(playerOrder);
+        }
         for (Player player : players) {
             player.ready = false;
         }
@@ -398,7 +441,10 @@ public class Game {
             player.analyseTingpai();
         }
 
-        // TODO: 发送配牌信息
+        // 发送配牌信息
+        for (Player player : playerOrder) {
+            player.onMatchStart(getPlayerMenfeng(player));
+        }
     }
 
     /**
@@ -443,6 +489,10 @@ public class Game {
                 card = paishan.nextCard();
             }
             player.justObtain = card;
+            // 通知玩家摸牌
+            for (Player p : playerOrder) {
+                p.onCardDraw(player, turn, paishan.getRemain());
+            }
         } else {
             player.justObtain = null;
         }
@@ -501,7 +551,10 @@ public class Game {
                     }
                 }
                 applyPlayerPointChange();
-                // TODO: 通知玩家
+                // 通知玩家
+                for (Player p : playerOrder) {
+                    p.onPlayerZimo(player, turn, action.outCard, result, point, zhuang);
+                }
                 // 清空立直棒，判断连庄
                 richi = 0;
                 if (zhuang) {
@@ -516,7 +569,10 @@ public class Game {
         // 展示新宝牌
         if (showDora) {
             paishan.doraCount++;
-            // TODO: 通知玩家
+            // 通知玩家
+            for (Player p : playerOrder) {
+                p.onNewDora(paishan.lastDoraPointer());
+            }
         }
 
         // 清除标记
@@ -533,6 +589,24 @@ public class Game {
                 shezhang.status = Mahjong.Shezhang.Status.RiChi;
             }
             player.shezhang.add(shezhang);
+            // 通知玩家
+            for (Player p : playerOrder) {
+                // TODO: 摸切标记
+                p.onCardPlay(player, turn, action.outCard, false);
+            }
+            if (action.type == Player.ActionType.RiChi) {
+                for (Player p : playerOrder) {
+                    p.onPlayerRichiDeclear(player, turn, firstXun);
+                }
+            }
+        }
+
+        // 通知玩家副露
+        // TODO: 副露类型
+        if (action.type == Player.ActionType.JiaGang || action.type == Player.ActionType.AnGang || action.type == Player.ActionType.Bei) {
+            for (Player p : playerOrder) {
+                p.onPlayerFulu(player, turn);
+            }
         }
 
         // 听牌、振听分析
@@ -546,6 +620,9 @@ public class Game {
                         break;
                     }
                 }
+            }
+            if (player.zhenting) {
+                player.onZhenTing();
             }
         }
 
@@ -657,6 +734,15 @@ public class Game {
         if (chiPlayer != null) {
             chiPlayer.operateCanChi();
         }
+        for (Player p : huPlayers) {
+            p.sendOperate();
+        }
+        if (pengPlayer != null) {
+            pengPlayer.sendOperate();
+        }
+        if (chiPlayer != null) {
+            chiPlayer.sendOperate();
+        }
 
         // 需要改变回合
         boolean changeTurn = true;
@@ -684,6 +770,11 @@ public class Game {
                 return true;
             }
             // 逐个役种、点数计算
+            ArrayList<Player> players = new ArrayList<>();
+            ArrayList<Integer> playerIndex = new ArrayList<>();
+            ArrayList<Mahjong.WinResult> winResults = new ArrayList<>();
+            ArrayList<Mahjong.PointResult> pointResults = new ArrayList<>();
+            ArrayList<Boolean> zhuangs = new ArrayList<>();
             boolean first = true;
             boolean hasZhuang = false;
             for (Player p : decideHuPlayers) {
@@ -700,9 +791,17 @@ public class Game {
                     p.pointChange += richi + 100 * playerCount * benchang;
                     player.pointChange -= 100 * playerCount * benchang;
                 }
+                players.add(p);
+                playerIndex.add(playerOrder.indexOf(p));
+                winResults.add(result);
+                pointResults.add(point);
+                zhuangs.add(zhuang);
             }
             applyPlayerPointChange();
-            // TODO: 通知玩家
+            // 通知玩家
+            for (Player p : playerOrder) {
+                p.onPlayerRong(players, playerIndex, action.outCard, winResults, pointResults, zhuangs);
+            }
             // 清空立直棒，判断连庄
             richi = 0;
             if (hasZhuang) {
@@ -734,6 +833,11 @@ public class Game {
                     shezhang.status = Mahjong.Shezhang.Status.Obtained;
                 }
                 mingpai();
+                // 通知玩家副露
+                // TODO: 副露类型
+                for (Player p : playerOrder) {
+                    p.onPlayerFulu(pengPlayer, playerOrder.indexOf(pengPlayer));
+                }
             }
         }
 
@@ -748,6 +852,11 @@ public class Game {
                     shezhang.status = Mahjong.Shezhang.Status.Obtained;
                 }
                 mingpai();
+                // 通知玩家副露
+                // TODO: 副露类型
+                for (Player p : playerOrder) {
+                    p.onPlayerFulu(chiPlayer, playerOrder.indexOf(chiPlayer));
+                }
             }
         }
 
@@ -757,7 +866,10 @@ public class Game {
             paishan.doraCount++;
             gangCount++;
             mingpai();
-            // TODO: 告知玩家宝牌
+            // 告知玩家宝牌
+            for (Player p : playerOrder) {
+                p.onNewDora(paishan.lastDoraPointer());
+            }
         } else if (action.type == Player.ActionType.JiaGang) {
             fromLingshang = true;
             showDora = true;
@@ -792,6 +904,10 @@ public class Game {
     private void applyPlayerPointChange() {
         for (Player player : playerOrder) {
             player.point += player.pointChange;
+        }
+        // 通知玩家
+        for (Player p : playerOrder) {
+            p.onPointChange();
         }
     }
 

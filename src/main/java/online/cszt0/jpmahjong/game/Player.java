@@ -1,8 +1,7 @@
 package online.cszt0.jpmahjong.game;
 
-import org.springframework.lang.Nullable;
-
 import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 玩家
@@ -246,4 +245,139 @@ public abstract class Player {
         // 荣和
         Ron
     }
+
+    /**
+     * 游戏开始事件
+     *
+     * @param playerList 玩家列表
+     * @param myIndex    我的下标
+     */
+    public abstract void onGameStart(List<Player> playerList, int myIndex);
+
+    /**
+     * 新一局开始
+     *
+     * @param menfeng 我的门风
+     */
+    public abstract void onMatchStart(Mahjong.Feng menfeng);
+
+    /**
+     * 玩家摸牌
+     *
+     * @param player      摸牌的玩家
+     * @param playerIndex 摸牌的玩家下标
+     * @param remain      余牌数量
+     */
+    public abstract void onCardDraw(Player player, int playerIndex, int remain);
+
+    /**
+     * 玩家切牌
+     *
+     * @param player      切牌的玩家
+     * @param playerIndex 切牌的玩家下标
+     * @param card        切的牌
+     * @param moqie       是否是摸切
+     */
+    public abstract void onCardPlay(Player player, int playerIndex, Mahjong.Card card, boolean moqie);
+
+    /**
+     * 玩家副露（吃、碰、杠（大明杠、加杠、暗杠）、拔北）
+     *
+     * @param player      副露的玩家
+     * @param playerIndex 副露的玩家下标
+     */
+    public abstract void onPlayerFulu(Player player, int playerIndex);
+
+    /**
+     * 玩家立直宣言
+     *
+     * @param player      立直的玩家
+     * @param playerIndex 立直的玩家下标
+     * @param wrichi      是否是两立直
+     */
+    public abstract void onPlayerRichiDeclear(Player player, int playerIndex, boolean wrichi);
+
+    /**
+     * 玩家自摸
+     *
+     * @param player      自摸的玩家
+     * @param playerIndex 自摸的玩家下标
+     * @param winResult   番、符、役种
+     * @param pointResult 点数
+     * @param zhuang      是否是庄
+     */
+    public abstract void onPlayerZimo(Player player, int playerIndex, Mahjong.Card card, Mahjong.WinResult winResult, Mahjong.PointResult pointResult, boolean zhuang);
+
+    /**
+     * 玩家荣和
+     *
+     * @param player      荣和的玩家
+     * @param playerIndex 荣和的玩家下标
+     * @param winResult   番、符、役种
+     * @param pointResult 点数
+     * @param zhuang      是否是庄
+     */
+    public abstract void onPlayerRong(List<Player> player, List<Integer> playerIndex, Mahjong.Card card, List<Mahjong.WinResult> winResult, List<Mahjong.PointResult> pointResult, List<Boolean> zhuang);
+
+    /**
+     * 九种九牌流局
+     */
+    public abstract void onPlayerKskh();
+
+    /**
+     * 三家和流局
+     */
+    public abstract void onSanJiaHu();
+
+    /**
+     * 荒牌流局
+     */
+    public abstract void onHuangPaiLiuJu();
+
+    /**
+     * 四家立直流局
+     */
+    public abstract void onSiJiaLiZhi();
+
+    /**
+     * 四杠散了流局
+     */
+    public abstract void onSiGangSanLe();
+
+    /**
+     * 四风连打流局
+     */
+    public abstract void onSiFengLianDa();
+
+    /**
+     * 流局满贯
+     *
+     * @param players 流局满贯的玩家
+     * @param zhuang  是否是庄
+     */
+    public abstract void onLiuJuManGuan(List<Player> players, List<Boolean> zhuang);
+
+    /**
+     * 分数结算
+     */
+    public abstract void onPointChange();
+
+    /**
+     * 终局
+     *
+     * @param order 位次
+     */
+    public abstract void onGameEnd(List<Player> order);
+
+    /**
+     * 新的宝牌
+     *
+     * @param pointer 新的宝牌指示牌
+     */
+    public abstract void onNewDora(Mahjong.Card pointer);
+
+    /**
+     * 振听
+     */
+    public abstract void onZhenTing();
 }

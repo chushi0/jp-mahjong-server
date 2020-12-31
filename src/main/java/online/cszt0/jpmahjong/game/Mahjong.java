@@ -991,6 +991,19 @@ public class Mahjong {
             if (num == 10) num = 1;
             return new Card(type, num);
         }
+
+        public int getRemain() {
+            return haidiCardIndex - nextCardIndex + 1;
+        }
+
+        /**
+         * 展示的最后一张宝牌指示牌
+         *
+         * @return 展示的最后一张宝牌指示牌
+         */
+        public Card lastDoraPointer() {
+            return cards[doraIndex - 2 * doraCount + 2];
+        }
     }
 
     /**
@@ -2311,12 +2324,13 @@ public class Mahjong {
 
     /**
      * 流满检查
+     *
      * @param shezhang 舍张
      * @return 如果流满，返回 true，否则返回 false
      */
     public static boolean isLiuman(ArrayList<Shezhang> shezhang) {
-        for(Shezhang sz:shezhang) {
-            if(sz.status == Shezhang.Status.Obtained || !sz.card.isYaoJiu()) {
+        for (Shezhang sz : shezhang) {
+            if (sz.status == Shezhang.Status.Obtained || !sz.card.isYaoJiu()) {
                 return false;
             }
         }
