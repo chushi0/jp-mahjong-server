@@ -1,5 +1,7 @@
 package online.cszt0.jpmahjong.game;
 
+import online.cszt0.jpmahjong.util.Utils;
+
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -127,19 +129,15 @@ public class Game {
 
     /**
      * 构建并初始化 Game 对象
+     *
+     * @param player 创建该房间的玩家
      */
-    public Game() {
+    public Game(Player player) {
         playerCount = 4;
         allLastChangfeng = 2;
+        players.add(player);
         synchronized (this) {
-            String id;
-            synchronized (gameSet) {
-                do {
-                    id = randomKey();
-                } while (gameSet.containsKey(id));
-                gameSet.put(id, this);
-            }
-            this.id = id;
+            this.id = Utils.randomUniqueId(gameSet, this);
 
             thread = new Thread(this::run);
             thread.start();
@@ -151,33 +149,6 @@ public class Game {
                 Thread.currentThread().interrupt();
             }
         }
-    }
-
-    /**
-     * 生成随机 key
-     *
-     * @return key
-     */
-    private static String randomKey() {
-        String id;
-        Random random = new Random();
-        StringBuilder builder = new StringBuilder();
-        for (int i = 0; i < 6; i++) {
-            int n = random.nextInt(10 + 26 + 26);
-            if (n < 10) {
-                builder.append((char) ('0' + n));
-                continue;
-            }
-            n -= 10;
-            if (n < 26) {
-                builder.append((char) ('a' + n));
-                continue;
-            }
-            n -= 26;
-            builder.append((char) ('A' + n));
-        }
-        id = builder.toString();
-        return id;
     }
 
     public String getId() {
@@ -236,6 +207,9 @@ public class Game {
                             }
                             if (richiCount == 4) {
                                 nextMatch(0);
+                                for (Player p : playerOrder) {
+                                    p.showPlate = true;
+                                }
                                 // 通知玩家
                                 for (Player p : playerOrder) {
                                     p.onSiJiaLiZhi();
@@ -472,7 +446,7 @@ public class Game {
         return Mahjong.Feng.values()[index];
     }
 
-    private boolean tickMatch() {
+    private boolean tickMatch() throws InterruptedException {
         Player player = getMenfengPlayer(Mahjong.Feng.values()[turn]);
 
         // 如果舍张有牌，清除第一巡标记
@@ -504,9 +478,28 @@ public class Game {
         env.dihu = turn != 0 && firstXun;
         paishan.fillDora(env);
 
+        // 是否可以自摸
+        player.canZimo = false;
+        if (player.justObtain != null) {
+            env.menfeng = getPlayerMenfeng(player);
+            Mahjong.CardSource source;
+            if (fromLingshang) {
+                source = Mahjong.CardSource.LingShang;
+            } else if (paishan.isHaidi()) {
+                source = Mahjong.CardSource.HaiDi;
+            } else {
+                source = Mahjong.CardSource.ZiMo;
+            }
+            Mahjong.WinResult result = Mahjong.checkWin(player.plate, player.justObtain, env, source, player.riChiType, player.ihatsu);
+            if (result != null && Mahjong.checkYi(result.yiZhongs) > 0) {
+                player.canZimo = true;
+            }
+        }
+
         // 等待玩家操作
         // 九种九牌、出牌、暗杠、加杠、拔北、立直、自摸
         Player.Action action = player.waitForAction(firstXun, canGang);
+        player.canZimo = false;
         // 处理九种九牌和自摸
         // 其他情况其他家可能会有操作，因此不能立即结算
         switch (action.type) {
@@ -573,6 +566,10 @@ public class Game {
             for (Player p : playerOrder) {
                 p.onNewDora(paishan.lastDoraPointer());
             }
+            // 重新填充宝牌
+            env.dora.clear();
+            env.ridora.clear();
+            paishan.fillDora(env);
         }
 
         // 清除标记
@@ -591,8 +588,7 @@ public class Game {
             player.shezhang.add(shezhang);
             // 通知玩家
             for (Player p : playerOrder) {
-                // TODO: 摸切标记
-                p.onCardPlay(player, turn, action.outCard, false);
+                p.onCardPlay(player, turn, action.outCard, action.moqie);
             }
             if (action.type == Player.ActionType.RiChi) {
                 for (Player p : playerOrder) {
@@ -679,16 +675,10 @@ public class Game {
                         continue;
                     }
                 }
-                // 无役，振听
-                boolean hasYi = false;
-                for (Mahjong.YiZhong yi : result.yiZhongs) {
-                    if (!yi.notYi) {
-                        hasYi = true;
-                        break;
-                    }
-                }
-                if (!hasYi) {
+                // 无役或番缚，振听
+                if (Mahjong.checkYi(result.yiZhongs) <= 0) {
                     p.zhenting = true;
+                    p.onZhenTing();
                     continue;
                 }
                 // 询问
@@ -986,7 +976,7 @@ public class Game {
      *
      * @return 场风
      */
-    private Mahjong.Feng getChangfeng() {
+    public Mahjong.Feng getChangfeng() {
         // FIXME: 三人麻将中，西风圈打完后的加时赛应该是北风还是东风？同理，二人麻将应该是哪一个？
         return Mahjong.Feng.values()[(changfeng - 1) % playerCount];
     }
@@ -1026,9 +1016,14 @@ public class Game {
             if (readyCount == playerCount) {
                 return true;
             }
+            // TODO: 需要再考虑玩家准备的情况
             playerChangeCondition.await();
         }
         throw new InterruptedException();
+    }
+
+    public List<Player> getPlayerOrder() {
+        return playerOrder;
     }
 
     /**
@@ -1042,6 +1037,7 @@ public class Game {
             if (!playerChangeLock.tryLock(1, TimeUnit.SECONDS)) {
                 return false;
             }
+            player.game = this;
             players.add(player);
             playerChangeCondition.signal();
             playerChangeLock.unlock();
@@ -1064,6 +1060,7 @@ public class Game {
                 return false;
             }
             if (players.remove(player)) {
+                player.game = null;
                 playerChangeCondition.signal();
             }
             playerChangeLock.unlock();
@@ -1072,5 +1069,17 @@ public class Game {
             e.printStackTrace();
             return false;
         }
+    }
+
+    public int getChang() {
+        return chang;
+    }
+
+    public int getRichiCount() {
+        return richi;
+    }
+
+    public int getBenchang() {
+        return benchang;
     }
 }

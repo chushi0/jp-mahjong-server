@@ -12,6 +12,10 @@ public abstract class Player {
      */
     public String name;
     /**
+     * 加入的游戏
+     */
+    public Game game;
+    /**
      * 准备状态
      */
     public boolean ready;
@@ -31,6 +35,10 @@ public abstract class Player {
      * 刚刚摸到的牌
      */
     public Mahjong.Card justObtain;
+    /**
+     * 刚刚摸到的牌可以自摸
+     */
+    public boolean canZimo;
     /**
      * 舍张
      */
@@ -71,6 +79,7 @@ public abstract class Player {
     protected int operateSrc;
 
     protected static final int FLAG_NONE = 0;
+    protected static final int FLAG_SEND = 0x80000000;
     /**
      * 吃
      */
@@ -106,12 +115,24 @@ public abstract class Player {
     }
 
     /**
-     * 等待玩家操作
+     * 等待玩家操作。立直后，若无特殊情况，则自动摸切
      *
      * @param firstXun 是否是首巡（无人鸣牌的第一巡）
+     * @param canGang  是否可以杠
      * @return 玩家操作
      */
-    public abstract Action waitForAction(boolean firstXun, boolean canGang);
+    public Action waitForAction(boolean firstXun, boolean canGang) throws InterruptedException {
+        if (riChiType != Mahjong.RiChiType.None) {
+            if (!((canGang && plate.canAnGang(justObtain, true)) || tingpai.contains(justObtain.asIgnoreRedDora()))) {
+                // 延迟 1.5 秒，防止执行速度过快
+                Thread.sleep(1500);
+                return new Action(ActionType.Play, justObtain, true);
+            }
+        }
+        return waitForPlayerAction(firstXun, canGang);
+    }
+
+    protected abstract Action waitForPlayerAction(boolean firstXun, boolean canGang) throws InterruptedException;
 
     /**
      * 初始化选项
@@ -137,7 +158,15 @@ public abstract class Player {
     /**
      * 发送操作选项（多次调用只发送一次）
      */
-    public abstract void sendOperate();
+    public void sendOperate() {
+        assert flag != FLAG_NONE;
+        if ((flag & FLAG_SEND) == 0) {
+            flag |= FLAG_SEND;
+            onOperateSend();
+        }
+    }
+
+    protected abstract void onOperateSend();
 
     /**
      * 打断操作
@@ -149,7 +178,7 @@ public abstract class Player {
      *
      * @return 如果该玩家决定荣和，则返回 true，否则返回 false
      */
-    public abstract boolean waitForRon();
+    public abstract boolean waitForRon() throws InterruptedException;
 
     /**
      * 等待碰操作
@@ -157,7 +186,7 @@ public abstract class Player {
      *
      * @return 如果该玩家决定碰，返回 1；决定杠，返回 2；否则，返回 0
      */
-    public abstract int waitForPeng();
+    public abstract int waitForPeng() throws InterruptedException;
 
     /**
      * 等待吃操作
@@ -165,7 +194,7 @@ public abstract class Player {
      *
      * @return 如果该玩家决定吃，返回 true
      */
-    public abstract boolean waitForChi();
+    public abstract boolean waitForChi() throws InterruptedException;
 
     /**
      * 是否需要将打出的牌横放
@@ -205,10 +234,20 @@ public abstract class Player {
     public static class Action {
         public final ActionType type;
         public final Mahjong.Card outCard;
+        public final boolean moqie;
 
-        public Action(ActionType type, Mahjong.Card outCard) {
+        public Action(ActionType type, Mahjong.Card outCard, boolean moqie) {
             this.type = type;
             this.outCard = outCard;
+            this.moqie = moqie;
+        }
+
+        public Action(ActionType type, Mahjong.Card outCard) {
+            this(type, outCard, false);
+        }
+
+        public Action(ActionType type) {
+            this(type, null, false);
         }
     }
 

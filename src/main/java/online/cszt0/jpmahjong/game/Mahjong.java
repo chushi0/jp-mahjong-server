@@ -80,6 +80,15 @@ public class Mahjong {
         }
 
         /**
+         * 获取原始牌面数字
+         *
+         * @return 原始牌面数字
+         */
+        public int getRawNumber() {
+            return number;
+        }
+
+        /**
          * 判断是否是红宝牌
          *
          * @return 如果是红宝牌，则返回0
@@ -286,6 +295,32 @@ public class Mahjong {
             if (c1.number > c2.number) c1 = c2;
             if (c1.number > c3.number) c1 = c3;
             return c1;
+        }
+
+        public Object toMap() {
+            List<Map<String, Object>> cards = new ArrayList<>();
+            if (obtain != null) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("type", obtain.getType().label);
+                map.put("number", obtain.getRawNumber());
+                cards.add(map);
+            }
+            for (Card card : original) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("type", card.getType().label);
+                map.put("number", card.getRawNumber());
+                cards.add(map);
+            }
+            if (jiagang != null) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("type", jiagang.getType().label);
+                map.put("number", jiagang.getRawNumber());
+                cards.add(map);
+            }
+            Map<String, Object> data = new HashMap<>();
+            data.put("cards", cards);
+            data.put("angang", isAnGang());
+            return data;
         }
     }
 
@@ -556,6 +591,28 @@ public class Mahjong {
             shisanyao.remove(card);
             cards.forEach(shisanyao::remove);
             return shisanyao.size() < 13 - 9;
+        }
+
+        public List<Map<String, Object>> toList() {
+            List<Map<String, Object>> plate = new ArrayList<>();
+            for (Mahjong.Card card : cards) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("type", card.getType().label);
+                map.put("number", card.getRawNumber());
+                plate.add(map);
+            }
+            return plate;
+        }
+
+        public Map<String, Object> toData() {
+            Map<String, Object> plate = new HashMap<>();
+            plate.put("cards", toList());
+            List<Object> fuluData = new ArrayList<>();
+            for (Fulu fulu : fulus) {
+                fuluData.add(fulu.toMap());
+            }
+            plate.put("fulus", fuluData);
+            return plate;
         }
     }
 
@@ -2335,5 +2392,20 @@ public class Mahjong {
             }
         }
         return true;
+    }
+
+    /**
+     * 检查有多少役
+     *
+     * @param yis 达成的役种
+     * @return 役数量
+     */
+    public static int checkYi(ArrayList<YiZhong> yis) {
+        int result = 0;
+        for (YiZhong yi : yis) {
+            if (yi.notYi) continue;
+            result += yi.fan;
+        }
+        return result;
     }
 }
